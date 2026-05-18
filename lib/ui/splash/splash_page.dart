@@ -1,27 +1,43 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../application/providers.dart';
+import '../../core/env.dart';
 import '../router.dart';
 
-class SplashPage extends StatefulWidget {
+class SplashPage extends ConsumerStatefulWidget {
   const SplashPage({super.key});
 
   @override
-  State<SplashPage> createState() => _SplashPageState();
+  ConsumerState<SplashPage> createState() => _SplashPageState();
 }
 
-class _SplashPageState extends State<SplashPage> {
+class _SplashPageState extends ConsumerState<SplashPage> {
+  Timer? _timer;
+
   @override
   void initState() {
     super.initState();
-    // Lot 1 : navigation temporaire. La décision réelle (onboarding / auth /
-    // home selon session Supabase) arrivera au lot 3.
-    Timer(const Duration(milliseconds: 1200), () {
-      if (!mounted) return;
-      context.go(AppRoutes.signIn);
-    });
+    // Si Supabase n'est pas configuré, on reste sur le splash plutôt que de
+    // naviguer vers un écran qui crashera en lisant le client. Évite aussi
+    // d'avoir à mocker tout l'arbre Riverpod en tests.
+    if (!Env.hasSupabase) return;
+    _timer = Timer(const Duration(milliseconds: 800), _decide);
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _decide() {
+    if (!mounted) return;
+    final session = ref.read(currentSessionProvider);
+    context.go(session != null ? AppRoutes.home : AppRoutes.signIn);
   }
 
   @override

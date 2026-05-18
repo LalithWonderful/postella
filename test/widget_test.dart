@@ -6,11 +6,10 @@ import 'package:postella/app.dart';
 void main() {
   testWidgets('App boots with splash branding', (tester) async {
     await tester.pumpWidget(const ProviderScope(child: PostellaApp()));
+    // Une seule frame : on vérifie le rendu du splash, sans laisser le
+    // timer déclencher la navigation (qui dépend de Supabase initialisé).
     await tester.pump();
     expect(find.text('Postella'), findsOneWidget);
-    // Laisser le timer du splash s'écouler avant la fin du test pour éviter
-    // les "pending timer" qui font échouer le runner.
-    await tester.pump(const Duration(seconds: 2));
-    await tester.pumpAndSettle();
+    expect(find.text('Vendez plus vite, plus simplement.'), findsOneWidget);
   });
 }

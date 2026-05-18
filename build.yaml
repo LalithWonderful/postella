@@ -1,0 +1,10 @@
+targets:
+  $default:
+    builders:
+      json_serializable:
+        options:
+          # Aligne les clés JSON sur les colonnes snake_case Postgres.
+          # Les modèles Dart gardent leurs noms camelCase, le mapping se fait
+          # automatiquement à la sérialisation.
+          field_rename: snake
+          explicit_to_json: true

@@ -10,10 +10,10 @@ _$GeneratedAdImpl _$$GeneratedAdImplFromJson(Map<String, dynamic> json) =>
     _$GeneratedAdImpl(
       title: json['title'] as String,
       description: json['description'] as String,
-      suggestedPrice: (json['suggestedPrice'] as num).toDouble(),
+      suggestedPrice: (json['suggested_price'] as num).toDouble(),
       condition: json['condition'] as String?,
       improvementTips:
-          (json['improvementTips'] as List<dynamic>?)
+          (json['improvement_tips'] as List<dynamic>?)
               ?.map((e) => e as String)
               .toList() ??
           const <String>[],
@@ -23,7 +23,7 @@ Map<String, dynamic> _$$GeneratedAdImplToJson(_$GeneratedAdImpl instance) =>
     <String, dynamic>{
       'title': instance.title,
       'description': instance.description,
-      'suggestedPrice': instance.suggestedPrice,
+      'suggested_price': instance.suggestedPrice,
       'condition': instance.condition,
-      'improvementTips': instance.improvementTips,
+      'improvement_tips': instance.improvementTips,
     };

@@ -8,12 +8,12 @@ part of 'ad.dart';
 
 _$AdImpl _$$AdImplFromJson(Map<String, dynamic> json) => _$AdImpl(
   id: json['id'] as String,
-  userId: json['userId'] as String,
-  categoryId: json['categoryId'] as String,
+  userId: json['user_id'] as String,
+  categoryId: json['category_id'] as String,
   subcategory: json['subcategory'] as String?,
   title: json['title'] as String?,
   description: json['description'] as String?,
-  suggestedPrice: (json['suggestedPrice'] as num?)?.toDouble(),
+  suggestedPrice: (json['suggested_price'] as num?)?.toDouble(),
   condition: json['condition'] as String?,
   photos:
       (json['photos'] as List<dynamic>?)?.map((e) => e as String).toList() ??
@@ -25,25 +25,25 @@ _$AdImpl _$$AdImplFromJson(Map<String, dynamic> json) => _$AdImpl(
   generator:
       $enumDecodeNullable(_$AdGeneratorEnumMap, json['generator']) ??
       AdGenerator.none,
-  createdAt: DateTime.parse(json['createdAt'] as String),
-  updatedAt: DateTime.parse(json['updatedAt'] as String),
+  createdAt: DateTime.parse(json['created_at'] as String),
+  updatedAt: DateTime.parse(json['updated_at'] as String),
 );
 
 Map<String, dynamic> _$$AdImplToJson(_$AdImpl instance) => <String, dynamic>{
   'id': instance.id,
-  'userId': instance.userId,
-  'categoryId': instance.categoryId,
+  'user_id': instance.userId,
+  'category_id': instance.categoryId,
   'subcategory': instance.subcategory,
   'title': instance.title,
   'description': instance.description,
-  'suggestedPrice': instance.suggestedPrice,
+  'suggested_price': instance.suggestedPrice,
   'condition': instance.condition,
   'photos': instance.photos,
   'details': instance.details,
   'status': _$AdStatusEnumMap[instance.status]!,
   'generator': _$AdGeneratorEnumMap[instance.generator]!,
-  'createdAt': instance.createdAt.toIso8601String(),
-  'updatedAt': instance.updatedAt.toIso8601String(),
+  'created_at': instance.createdAt.toIso8601String(),
+  'updated_at': instance.updatedAt.toIso8601String(),
 };
 
 const _$AdStatusEnumMap = {

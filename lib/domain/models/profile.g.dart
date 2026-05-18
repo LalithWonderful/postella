@@ -11,9 +11,9 @@ _$ProfileImpl _$$ProfileImplFromJson(Map<String, dynamic> json) =>
       id: json['id'] as String,
       email: json['email'] as String,
       plan: $enumDecodeNullable(_$PlanEnumMap, json['plan']) ?? Plan.free,
-      premiumTrialUsed: json['premiumTrialUsed'] as bool? ?? false,
-      createdAdsCount: (json['createdAdsCount'] as num?)?.toInt() ?? 0,
-      createdAt: DateTime.parse(json['createdAt'] as String),
+      premiumTrialUsed: json['premium_trial_used'] as bool? ?? false,
+      createdAdsCount: (json['created_ads_count'] as num?)?.toInt() ?? 0,
+      createdAt: DateTime.parse(json['created_at'] as String),
     );
 
 Map<String, dynamic> _$$ProfileImplToJson(_$ProfileImpl instance) =>
@@ -21,9 +21,9 @@ Map<String, dynamic> _$$ProfileImplToJson(_$ProfileImpl instance) =>
       'id': instance.id,
       'email': instance.email,
       'plan': _$PlanEnumMap[instance.plan]!,
-      'premiumTrialUsed': instance.premiumTrialUsed,
-      'createdAdsCount': instance.createdAdsCount,
-      'createdAt': instance.createdAt.toIso8601String(),
+      'premium_trial_used': instance.premiumTrialUsed,
+      'created_ads_count': instance.createdAdsCount,
+      'created_at': instance.createdAt.toIso8601String(),
     };
 
 const _$PlanEnumMap = {Plan.free: 'free', Plan.premium: 'premium'};

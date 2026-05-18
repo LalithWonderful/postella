@@ -13,15 +13,32 @@ App mobile Flutter qui aide à créer rapidement une annonce de seconde main à 
 
 ## Démarrage
 
-```sh
-flutter pub get
-flutter run \
-  --dart-define=SUPABASE_URL=... \
-  --dart-define=SUPABASE_ANON_KEY=... \
-  --dart-define=GEMINI_API_KEY=...
-```
+1. Copier le template d'env et y mettre vos clés :
+   ```sh
+   cp env.example.json env.json
+   # Éditer env.json avec les valeurs Supabase / Gemini / OpenAI
+   ```
+   `env.json` est gitignoré et ne doit JAMAIS être commité.
 
-En lot 1 aucune clé n'est requise : l'app se lance sur le splash puis route vers des écrans placeholder.
+2. Installer les dépendances et générer le code :
+   ```sh
+   flutter pub get
+   dart run build_runner build --delete-conflicting-outputs
+   ```
+
+3. Lancer l'app :
+   ```sh
+   flutter run --dart-define-from-file=env.json
+   ```
+
+Sans `env.json` valide, l'app démarre quand même mais en mode déconnecté
+(Supabase non initialisé, écrans auth purement décoratifs).
+
+## Supabase
+
+Les migrations sont dans `supabase/migrations/`. Pour appliquer le schéma
+initial : Supabase Dashboard → SQL Editor → coller le contenu de
+`0001_init.sql` → Run.
 
 ## Structure
 
@@ -40,7 +57,8 @@ test/                     # tests unitaires
 ## Lots de développement
 
 - **Lot 1** ✅ Bootstrap : projet, thème, routes, écrans placeholder.
-- **Lot 2** Domain : modèles freezed, 9 catégories peuplées, quota_policy + tests.
-- **Lot 3** Supabase : migrations, RLS, RPC `consume_quota`, écrans auth.
+- **Lot 2** ✅ Domain : modèles freezed, 9 catégories peuplées, quota_policy + tests.
+- **Lot 3** ✅ Supabase : migrations SQL, RLS, RPC `consume_quota`, écrans auth email/password.
+- **Lot 3b** Auth OAuth Google + Apple (à venir).
 - **Lot 4** Wizard de création : photos + tips, formulaire dynamique, résultat.
 - **Lot 5** IA : Gemini réel + stub OpenAI, écran quota/upsell.
