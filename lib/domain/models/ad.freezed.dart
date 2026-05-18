@@ -32,7 +32,7 @@ mixin _$Ad {
   List<String> get photos => throw _privateConstructorUsedError;
   Map<String, dynamic> get details => throw _privateConstructorUsedError;
   AdStatus get status => throw _privateConstructorUsedError;
-  AdGenerator get generator => throw _privateConstructorUsedError;
+  AdEngine get generator => throw _privateConstructorUsedError;
   DateTime get createdAt => throw _privateConstructorUsedError;
   DateTime get updatedAt => throw _privateConstructorUsedError;
 
@@ -62,7 +62,7 @@ abstract class $AdCopyWith<$Res> {
     List<String> photos,
     Map<String, dynamic> details,
     AdStatus status,
-    AdGenerator generator,
+    AdEngine generator,
     DateTime createdAt,
     DateTime updatedAt,
   });
@@ -146,7 +146,7 @@ class _$AdCopyWithImpl<$Res, $Val extends Ad> implements $AdCopyWith<$Res> {
             generator: null == generator
                 ? _value.generator
                 : generator // ignore: cast_nullable_to_non_nullable
-                      as AdGenerator,
+                      as AdEngine,
             createdAt: null == createdAt
                 ? _value.createdAt
                 : createdAt // ignore: cast_nullable_to_non_nullable
@@ -179,7 +179,7 @@ abstract class _$$AdImplCopyWith<$Res> implements $AdCopyWith<$Res> {
     List<String> photos,
     Map<String, dynamic> details,
     AdStatus status,
-    AdGenerator generator,
+    AdEngine generator,
     DateTime createdAt,
     DateTime updatedAt,
   });
@@ -260,7 +260,7 @@ class __$$AdImplCopyWithImpl<$Res> extends _$AdCopyWithImpl<$Res, _$AdImpl>
         generator: null == generator
             ? _value.generator
             : generator // ignore: cast_nullable_to_non_nullable
-                  as AdGenerator,
+                  as AdEngine,
         createdAt: null == createdAt
             ? _value.createdAt
             : createdAt // ignore: cast_nullable_to_non_nullable
@@ -289,7 +289,7 @@ class _$AdImpl implements _Ad {
     final List<String> photos = const <String>[],
     final Map<String, dynamic> details = const <String, dynamic>{},
     this.status = AdStatus.draft,
-    this.generator = AdGenerator.none,
+    this.generator = AdEngine.none,
     required this.createdAt,
     required this.updatedAt,
   }) : _photos = photos,
@@ -337,7 +337,7 @@ class _$AdImpl implements _Ad {
   final AdStatus status;
   @override
   @JsonKey()
-  final AdGenerator generator;
+  final AdEngine generator;
   @override
   final DateTime createdAt;
   @override
@@ -424,7 +424,7 @@ abstract class _Ad implements Ad {
     final List<String> photos,
     final Map<String, dynamic> details,
     final AdStatus status,
-    final AdGenerator generator,
+    final AdEngine generator,
     required final DateTime createdAt,
     required final DateTime updatedAt,
   }) = _$AdImpl;
@@ -454,7 +454,7 @@ abstract class _Ad implements Ad {
   @override
   AdStatus get status;
   @override
-  AdGenerator get generator;
+  AdEngine get generator;
   @override
   DateTime get createdAt;
   @override

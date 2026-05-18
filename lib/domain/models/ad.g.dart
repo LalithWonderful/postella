@@ -23,8 +23,8 @@ _$AdImpl _$$AdImplFromJson(Map<String, dynamic> json) => _$AdImpl(
   status:
       $enumDecodeNullable(_$AdStatusEnumMap, json['status']) ?? AdStatus.draft,
   generator:
-      $enumDecodeNullable(_$AdGeneratorEnumMap, json['generator']) ??
-      AdGenerator.none,
+      $enumDecodeNullable(_$AdEngineEnumMap, json['generator']) ??
+      AdEngine.none,
   createdAt: DateTime.parse(json['created_at'] as String),
   updatedAt: DateTime.parse(json['updated_at'] as String),
 );
@@ -41,7 +41,7 @@ Map<String, dynamic> _$$AdImplToJson(_$AdImpl instance) => <String, dynamic>{
   'photos': instance.photos,
   'details': instance.details,
   'status': _$AdStatusEnumMap[instance.status]!,
-  'generator': _$AdGeneratorEnumMap[instance.generator]!,
+  'generator': _$AdEngineEnumMap[instance.generator]!,
   'created_at': instance.createdAt.toIso8601String(),
   'updated_at': instance.updatedAt.toIso8601String(),
 };
@@ -52,8 +52,8 @@ const _$AdStatusEnumMap = {
   AdStatus.saved: 'saved',
 };
 
-const _$AdGeneratorEnumMap = {
-  AdGenerator.gemini: 'gemini',
-  AdGenerator.openai: 'openai',
-  AdGenerator.none: 'none',
+const _$AdEngineEnumMap = {
+  AdEngine.gemini: 'gemini',
+  AdEngine.openai: 'openai',
+  AdEngine.none: 'none',
 };

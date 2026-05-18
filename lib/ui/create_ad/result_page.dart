@@ -59,7 +59,7 @@ class _ResultPageState extends ConsumerState<ResultPage> {
         photos: const [],
         details: draft.details,
         status: AdStatus.saved,
-        generator: AdGenerator.gemini,
+        generator: AdEngine.gemini,
         createdAt: now,
         updatedAt: now,
       );

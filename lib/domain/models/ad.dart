@@ -7,7 +7,7 @@ part 'ad.g.dart';
 enum AdStatus { draft, generated, saved }
 
 /// Moteur ayant produit la dernière version de l'annonce.
-enum AdGenerator { gemini, openai, none }
+enum AdEngine { gemini, openai, none }
 
 @freezed
 class Ad with _$Ad {
@@ -23,7 +23,7 @@ class Ad with _$Ad {
     @Default(<String>[]) List<String> photos,
     @Default(<String, dynamic>{}) Map<String, dynamic> details,
     @Default(AdStatus.draft) AdStatus status,
-    @Default(AdGenerator.none) AdGenerator generator,
+    @Default(AdEngine.none) AdEngine generator,
     required DateTime createdAt,
     required DateTime updatedAt,
   }) = _Ad;
