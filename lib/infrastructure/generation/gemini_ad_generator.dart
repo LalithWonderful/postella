@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:http/http.dart' as http;
 
 import '../../domain/categories/category.dart';
@@ -9,6 +10,15 @@ import '../../domain/models/ad_draft.dart';
 import '../../domain/models/generated_ad.dart';
 import 'gemini_prompt.dart';
 import 'gemini_response_parser.dart';
+
+void _log(String msg) {
+  if (kDebugMode) debugPrint('[Gemini] $msg');
+}
+
+/// Tronque pour éviter de polluer la console — utile pour les erreurs
+/// Gemini qui peuvent renvoyer des messages très longs.
+String _truncate(String s, [int max = 400]) =>
+    s.length <= max ? s : '${s.substring(0, max)}…';
 
 /// Modèle Gemini par défaut — flash 2.5 : latence basse et coût faible,
 /// largement suffisant pour rédiger une annonce courte.
@@ -47,6 +57,9 @@ class GeminiAdGenerator implements AdGenerator {
   }) async {
     final uri = Uri.parse('$_kBaseUrl/models/$model:generateContent?key=$apiKey');
     final body = _buildRequestBody(draft: draft, category: category);
+    // Jamais l'URI complète (contient ?key=...). Path uniquement, et longueur
+    // du body pour estimer le poids du prompt.
+    _log('POST path=${uri.path} model=$model bodyLen=${jsonEncode(body).length}');
 
     final http.Response response;
     try {
@@ -58,16 +71,25 @@ class GeminiAdGenerator implements AdGenerator {
           )
           .timeout(timeout);
     } on TimeoutException {
+      _log('ERROR timeout après ${timeout.inSeconds}s');
       throw GenerationException(
         'La génération a pris trop de temps. Vérifie ta connexion et réessaie.',
       );
     } on http.ClientException catch (e) {
+      _log('ERROR ClientException: ${e.message}');
       throw GenerationException('Erreur réseau pendant la génération : ${e.message}');
     } catch (e) {
+      _log('ERROR inattendue: $e');
       throw GenerationException('Erreur inattendue : $e');
     }
 
+    _log('HTTP ${response.statusCode} bodyLen=${response.body.length}');
+
     if (response.statusCode != 200) {
+      // Le body d'erreur Gemini contient le code (PERMISSION_DENIED,
+      // INVALID_ARGUMENT, NOT_FOUND…) et un message — précieux pour
+      // diagnostiquer modèle inaccessible / clé invalide / quota épuisé.
+      _log('error body: ${_truncate(response.body)}');
       throw GenerationException(
         'Gemini a répondu ${response.statusCode}. Réessaie dans un instant.',
       );
@@ -76,18 +98,37 @@ class GeminiAdGenerator implements AdGenerator {
     final Map<String, dynamic> envelope;
     try {
       envelope = jsonDecode(response.body) as Map<String, dynamic>;
-    } catch (_) {
+    } catch (e) {
+      _log('FALLBACK : enveloppe JSON invalide ($e)');
+      _log('raw body: ${_truncate(response.body)}');
       return fallback.generate(draft: draft, category: category);
     }
 
     final text = extractGeminiText(envelope);
     if (text == null || text.trim().isEmpty) {
+      _log('FALLBACK : extractGeminiText vide. '
+          'envelope keys=${envelope.keys.toList()}');
+      // Détail utile : Gemini renvoie souvent un finishReason ou un
+      // promptFeedback (filtres safety) quand il refuse de générer.
+      final candidates = envelope['candidates'];
+      if (candidates is List && candidates.isNotEmpty) {
+        _log('candidate[0]: ${_truncate(jsonEncode(candidates.first))}');
+      }
+      final feedback = envelope['promptFeedback'];
+      if (feedback != null) {
+        _log('promptFeedback: ${_truncate(jsonEncode(feedback))}');
+      }
       return fallback.generate(draft: draft, category: category);
     }
 
     try {
-      return parseGeminiAd(rawJson: text, draft: draft);
-    } on GeminiResponseException {
+      final ad = parseGeminiAd(rawJson: text, draft: draft);
+      _log('OK title="${_truncate(ad.title, 80)}" '
+          'descLen=${ad.description.length} tips=${ad.improvementTips.length}');
+      return ad;
+    } on GeminiResponseException catch (e) {
+      _log('FALLBACK : parseGeminiAd a échoué (${e.reason})');
+      _log('raw text: ${_truncate(text)}');
       return fallback.generate(draft: draft, category: category);
     }
   }

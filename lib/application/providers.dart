@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -76,8 +77,24 @@ final signedPhotoUrlProvider =
 /// `GeminiAdGenerator.fallback`).
 final adGeneratorProvider = Provider<AdGenerator>((_) {
   const mockFallback = MockAdGenerator();
+  if (kDebugMode) {
+    // Diagnostic : on imprime la PRÉSENCE et la LONGUEUR de la clé, jamais
+    // sa valeur. Si keyLength=0 ici, c'est que `--dart-define-from-file=env.json`
+    // n'a pas été passé au lancement (ou que la clé a un autre nom dans le JSON).
+    debugPrint(
+      '[adGeneratorProvider] hasGemini=${Env.hasGemini} '
+      'geminiKeyLength=${Env.geminiApiKey.length} '
+      'hasSupabase=${Env.hasSupabase}',
+    );
+  }
   if (!Env.hasGemini) {
+    if (kDebugMode) {
+      debugPrint('[adGeneratorProvider] → MockAdGenerator (pas de clé Gemini)');
+    }
     return const MockAdGenerator(simulatedLatency: Duration(milliseconds: 1200));
+  }
+  if (kDebugMode) {
+    debugPrint('[adGeneratorProvider] → GeminiAdGenerator');
   }
   return GeminiAdGenerator(
     apiKey: Env.geminiApiKey,
