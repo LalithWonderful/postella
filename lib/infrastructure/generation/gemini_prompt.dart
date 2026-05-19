@@ -8,9 +8,14 @@ import '../../domain/models/ad_draft.dart';
 /// Le `responseSchema` (côté `generationConfig`) garantit déjà la forme
 /// JSON ; ce prompt sert à transmettre la matière (catégorie, champs,
 /// valeurs) et les contraintes éditoriales.
+///
+/// `includeTips` : passe à `false` lors d'un retry après troncature pour
+/// produire une réponse plus compacte (le schéma de retry omet
+/// `improvement_tips` côté generator).
 String buildGeminiPrompt({
   required AdDraft draft,
   required Category category,
+  bool includeTips = true,
 }) {
   final buf = StringBuffer();
 
@@ -71,11 +76,20 @@ String buildGeminiPrompt({
     'suffisent à l\'estimer (marque, modèle, état, contexte). '
     'Sinon, laisse `null`. Ne devine pas.',
   );
+  if (includeTips) {
+    buf.writeln(
+      '- "improvement_tips" : 1 à 3 conseils actionnables pour mieux vendre '
+      '(photo, info manquante, prix). Pas de remplissage.',
+    );
+  }
   buf.writeln(
-    '- "improvement_tips" : 1 à 3 conseils actionnables pour mieux vendre '
-    '(photo, info manquante, prix). Pas de remplissage.',
+    '- Réponds STRICTEMENT au schéma JSON imposé. Aucun texte hors JSON, '
+    'aucune balise markdown, aucun commentaire.',
   );
-  buf.writeln('- Réponds STRICTEMENT au schéma JSON imposé. Aucun texte hors JSON.');
+  buf.writeln(
+    '- Renvoie UN SEUL objet JSON complet et bien formé : ouvre `{`, ferme '
+    '`}`, ne tronque jamais la sortie. Sois concis pour tenir dans la limite.',
+  );
 
   return buf.toString();
 }

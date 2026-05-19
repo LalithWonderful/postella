@@ -55,11 +55,57 @@ class GeminiAdGenerator implements AdGenerator {
     required AdDraft draft,
     required Category category,
   }) async {
+    // 1er essai : schéma complet, budget de tokens normal.
+    final first = await _callGeminiOnce(
+      draft: draft,
+      category: category,
+      includeTips: true,
+      maxOutputTokens: 1500,
+      attempt: 1,
+    );
+    if (first.ad != null) return first.ad!;
+
+    // Retry unique si la troncature est probable (MAX_TOKENS ou texte qui
+    // ne se termine pas par `}`). On simplifie le schéma (drop des tips)
+    // et on remonte le budget pour limiter le risque de re-troncature.
+    if (first.shouldRetry) {
+      _log('RETRY 2/2 : schéma simplifié (sans improvement_tips), '
+          'maxOutputTokens=2000');
+      final second = await _callGeminiOnce(
+        draft: draft,
+        category: category,
+        includeTips: false,
+        maxOutputTokens: 2000,
+        attempt: 2,
+      );
+      if (second.ad != null) return second.ad!;
+      _log('FALLBACK : retry KO (${second.failureReason ?? "inconnu"})');
+    } else {
+      _log('FALLBACK : ${first.failureReason ?? "raison inconnue"}');
+    }
+
+    return fallback.generate(draft: draft, category: category);
+  }
+
+  Future<_GeminiAttempt> _callGeminiOnce({
+    required AdDraft draft,
+    required Category category,
+    required bool includeTips,
+    required int maxOutputTokens,
+    required int attempt,
+  }) async {
     final uri = Uri.parse('$_kBaseUrl/models/$model:generateContent?key=$apiKey');
-    final body = _buildRequestBody(draft: draft, category: category);
+    final body = _buildRequestBody(
+      draft: draft,
+      category: category,
+      includeTips: includeTips,
+      maxOutputTokens: maxOutputTokens,
+    );
     // Jamais l'URI complète (contient ?key=...). Path uniquement, et longueur
     // du body pour estimer le poids du prompt.
-    _log('POST path=${uri.path} model=$model bodyLen=${jsonEncode(body).length}');
+    _log('POST attempt=$attempt path=${uri.path} model=$model '
+        'bodyLen=${jsonEncode(body).length} maxOut=$maxOutputTokens '
+        'tips=$includeTips');
 
     final http.Response response;
     try {
@@ -99,45 +145,64 @@ class GeminiAdGenerator implements AdGenerator {
     try {
       envelope = jsonDecode(response.body) as Map<String, dynamic>;
     } catch (e) {
-      _log('FALLBACK : enveloppe JSON invalide ($e)');
+      _log('ÉCHEC enveloppe JSON invalide ($e)');
       _log('raw body: ${_truncate(response.body)}');
-      return fallback.generate(draft: draft, category: category);
+      return _GeminiAttempt.failed(
+        failureReason: 'enveloppe JSON invalide',
+        shouldRetry: false,
+      );
     }
 
+    final finishReason = extractFinishReason(envelope);
+    final usage = extractUsageMetadata(envelope);
     final text = extractGeminiText(envelope);
+
     if (text == null || text.trim().isEmpty) {
-      _log('FALLBACK : extractGeminiText vide. '
+      _log('ÉCHEC texte vide. finishReason=$finishReason usage=$usage '
           'envelope keys=${envelope.keys.toList()}');
-      // Détail utile : Gemini renvoie souvent un finishReason ou un
-      // promptFeedback (filtres safety) quand il refuse de générer.
-      final candidates = envelope['candidates'];
-      if (candidates is List && candidates.isNotEmpty) {
-        _log('candidate[0]: ${_truncate(jsonEncode(candidates.first))}');
-      }
       final feedback = envelope['promptFeedback'];
       if (feedback != null) {
         _log('promptFeedback: ${_truncate(jsonEncode(feedback))}');
       }
-      return fallback.generate(draft: draft, category: category);
+      // Si Gemini a coupé sur MAX_TOKENS avant même de produire du texte,
+      // ça vaut le coup de retenter avec un budget plus large.
+      return _GeminiAttempt.failed(
+        failureReason: 'texte vide (finishReason=$finishReason)',
+        shouldRetry: finishReason == 'MAX_TOKENS',
+      );
     }
 
     try {
       final ad = parseGeminiAd(rawJson: text, draft: draft);
-      _log('OK title="${_truncate(ad.title, 80)}" '
+      _log('OK attempt=$attempt finishReason=$finishReason usage=$usage '
+          'title="${_truncate(ad.title, 80)}" '
           'descLen=${ad.description.length} tips=${ad.improvementTips.length}');
-      return ad;
+      return _GeminiAttempt.ok(ad);
     } on GeminiResponseException catch (e) {
-      _log('FALLBACK : parseGeminiAd a échoué (${e.reason})');
+      // Symptôme principal observé en prod : JSON tronqué. On loggue tout
+      // ce qui aide à diagnostiquer puis on signale si un retry vaut la peine.
+      final truncated = looksTruncated(text: text, finishReason: finishReason);
+      _log('ÉCHEC parseGeminiAd : ${e.reason}. '
+          'finishReason=$finishReason usage=$usage truncated=$truncated');
       _log('raw text: ${_truncate(text)}');
-      return fallback.generate(draft: draft, category: category);
+      return _GeminiAttempt.failed(
+        failureReason: 'parse KO (${e.reason})',
+        shouldRetry: truncated,
+      );
     }
   }
 
   Map<String, dynamic> _buildRequestBody({
     required AdDraft draft,
     required Category category,
+    required bool includeTips,
+    required int maxOutputTokens,
   }) {
-    final prompt = buildGeminiPrompt(draft: draft, category: category);
+    final prompt = buildGeminiPrompt(
+      draft: draft,
+      category: category,
+      includeTips: includeTips,
+    );
     return {
       'contents': [
         {
@@ -150,17 +215,34 @@ class GeminiAdGenerator implements AdGenerator {
       'generationConfig': {
         'temperature': 0.4,
         'topP': 0.9,
-        'maxOutputTokens': 1024,
+        'maxOutputTokens': maxOutputTokens,
         'responseMimeType': 'application/json',
-        'responseSchema': _kResponseSchema,
+        'responseSchema': includeTips ? _kResponseSchemaFull : _kResponseSchemaSlim,
       },
     };
   }
 }
 
+/// Résultat d'un essai Gemini. Soit on a une [GeneratedAd], soit on a
+/// échoué — et dans ce cas on indique si un retry a une chance d'aider
+/// (typiquement : troncature détectée).
+class _GeminiAttempt {
+  const _GeminiAttempt._({this.ad, this.failureReason, this.shouldRetry = false});
+  factory _GeminiAttempt.ok(GeneratedAd ad) => _GeminiAttempt._(ad: ad);
+  factory _GeminiAttempt.failed({
+    required String failureReason,
+    required bool shouldRetry,
+  }) =>
+      _GeminiAttempt._(failureReason: failureReason, shouldRetry: shouldRetry);
+
+  final GeneratedAd? ad;
+  final String? failureReason;
+  final bool shouldRetry;
+}
+
 /// Schéma JSON imposé à Gemini via `responseSchema`. Garantit que la
 /// réponse a la forme attendue par le parser, indépendamment du prompt.
-const Map<String, dynamic> _kResponseSchema = {
+const Map<String, dynamic> _kResponseSchemaFull = {
   'type': 'OBJECT',
   'properties': {
     'title': {'type': 'STRING'},
@@ -172,6 +254,21 @@ const Map<String, dynamic> _kResponseSchema = {
     'improvement_tips': {
       'type': 'ARRAY',
       'items': {'type': 'STRING'},
+    },
+  },
+  'required': ['title', 'description'],
+};
+
+/// Schéma de retry — on retire `improvement_tips` pour réduire la taille
+/// de sortie et la probabilité d'une nouvelle troncature.
+const Map<String, dynamic> _kResponseSchemaSlim = {
+  'type': 'OBJECT',
+  'properties': {
+    'title': {'type': 'STRING'},
+    'description': {'type': 'STRING'},
+    'suggested_price': {
+      'type': 'NUMBER',
+      'nullable': true,
     },
   },
   'required': ['title', 'description'],

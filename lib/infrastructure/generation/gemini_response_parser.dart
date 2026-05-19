@@ -91,6 +91,38 @@ String? extractGeminiText(Map<String, dynamic> envelope) {
   return text is String ? text : null;
 }
 
+/// Extrait `candidates[0].finishReason`. Valeurs typiques : `STOP` (réponse
+/// terminée), `MAX_TOKENS` (sortie tronquée — symptôme classique du JSON
+/// incomplet), `SAFETY`, `RECITATION`.
+String? extractFinishReason(Map<String, dynamic> envelope) {
+  final candidates = envelope['candidates'];
+  if (candidates is! List || candidates.isEmpty) return null;
+  final first = candidates.first;
+  if (first is! Map) return null;
+  final reason = first['finishReason'];
+  return reason is String ? reason : null;
+}
+
+/// Extrait `usageMetadata` (promptTokenCount, candidatesTokenCount,
+/// totalTokenCount). Utile pour diagnostiquer une troncature côté output.
+Map<String, dynamic>? extractUsageMetadata(Map<String, dynamic> envelope) {
+  final meta = envelope['usageMetadata'];
+  if (meta is Map<String, dynamic>) return meta;
+  return null;
+}
+
+/// Heuristique : la réponse est probablement tronquée si Gemini signale
+/// `MAX_TOKENS`, ou si le texte ne se termine pas par `}` (le JSON attendu
+/// est un objet). On l'utilise pour décider d'un retry avec un schéma
+/// simplifié.
+bool looksTruncated({required String? text, required String? finishReason}) {
+  if (finishReason == 'MAX_TOKENS') return true;
+  if (text == null) return false;
+  final trimmed = text.trimRight();
+  if (trimmed.isEmpty) return false;
+  return !trimmed.endsWith('}');
+}
+
 String? _nonEmptyString(Object? v) {
   if (v is! String) return null;
   final trimmed = v.trim();

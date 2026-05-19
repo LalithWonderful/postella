@@ -75,6 +75,25 @@ void main() {
       );
     });
 
+    test('throw GeminiResponseException sur JSON tronqué (cas réel Gemini)', () {
+      // Symptôme observé en prod : Gemini répond HTTP 200 mais le JSON est
+      // coupé au milieu (MAX_TOKENS). Le parser doit lever, jamais retourner
+      // de GeneratedAd partielle.
+      const truncated = '{\n'
+          '  "title": "Vêtement femme taille 36 - Neuf sans étiquette",\n'
+          '  "description": "Très joli haut, jamais porté, taille 36';
+      expect(
+        () => parseGeminiAd(rawJson: truncated, draft: draftWithPrice),
+        throwsA(
+          isA<GeminiResponseException>().having(
+            (e) => e.reason,
+            'reason',
+            contains('JSON invalide'),
+          ),
+        ),
+      );
+    });
+
     test('throw GeminiResponseException si title manquant', () {
       final raw = jsonEncode({'description': 'D'});
       expect(
@@ -127,6 +146,73 @@ void main() {
         }),
         isNull,
       );
+    });
+  });
+
+  group('extractFinishReason', () {
+    test('extrait candidates[0].finishReason', () {
+      expect(
+        extractFinishReason({
+          'candidates': [
+            {'finishReason': 'MAX_TOKENS'},
+          ],
+        }),
+        'MAX_TOKENS',
+      );
+    });
+
+    test('null si absent', () {
+      expect(extractFinishReason(const {}), isNull);
+      expect(extractFinishReason({'candidates': []}), isNull);
+      expect(extractFinishReason({'candidates': [{}]}), isNull);
+    });
+  });
+
+  group('extractUsageMetadata', () {
+    test('extrait usageMetadata', () {
+      final usage = extractUsageMetadata({
+        'usageMetadata': {
+          'promptTokenCount': 200,
+          'candidatesTokenCount': 1024,
+          'totalTokenCount': 1224,
+        },
+      });
+      expect(usage, isNotNull);
+      expect(usage!['candidatesTokenCount'], 1024);
+    });
+
+    test('null si absent', () {
+      expect(extractUsageMetadata(const {}), isNull);
+    });
+  });
+
+  group('looksTruncated', () {
+    test('vrai sur MAX_TOKENS quel que soit le texte', () {
+      expect(
+        looksTruncated(text: '{"title":"T"}', finishReason: 'MAX_TOKENS'),
+        isTrue,
+      );
+    });
+
+    test('vrai si le texte ne se termine pas par "}"', () {
+      expect(looksTruncated(text: '{"title":"T",', finishReason: null), isTrue);
+      expect(looksTruncated(text: '{"title":"T"', finishReason: 'STOP'), isTrue);
+    });
+
+    test('faux si le texte se termine bien par "}" et finishReason != MAX_TOKENS', () {
+      expect(
+        looksTruncated(text: '{"title":"T"}', finishReason: 'STOP'),
+        isFalse,
+      );
+      expect(
+        looksTruncated(text: '{"title":"T"}  \n', finishReason: null),
+        isFalse,
+      );
+    });
+
+    test('faux si texte null ou vide', () {
+      expect(looksTruncated(text: null, finishReason: 'STOP'), isFalse);
+      expect(looksTruncated(text: '   ', finishReason: 'STOP'), isFalse);
     });
   });
 }

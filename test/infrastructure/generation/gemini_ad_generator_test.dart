@@ -47,6 +47,36 @@ String _envelope(Map<String, dynamic> innerJson) {
   });
 }
 
+/// Enveloppe avec un texte brut (utile pour simuler un JSON tronqué ou
+/// pour injecter un finishReason / usageMetadata). Renvoie une
+/// [http.Response] encodée en UTF-8 — nécessaire dès qu'on injecte du
+/// non-ASCII (em-dash, accents…) car le constructeur par défaut suppose
+/// Latin-1.
+http.Response _responseRaw({
+  required String rawText,
+  String? finishReason,
+  Map<String, dynamic>? usageMetadata,
+}) {
+  final body = jsonEncode({
+    'candidates': [
+      {
+        'content': {
+          'parts': [
+            {'text': rawText},
+          ],
+        },
+        'finishReason': ?finishReason,
+      },
+    ],
+    'usageMetadata': ?usageMetadata,
+  });
+  return http.Response.bytes(
+    utf8.encode(body),
+    200,
+    headers: {'content-type': 'application/json; charset=utf-8'},
+  );
+}
+
 void main() {
   group('GeminiAdGenerator', () {
     test('appelle Gemini avec le bon endpoint et un body JSON valide', () async {
@@ -152,6 +182,112 @@ void main() {
           ),
         ),
       );
+    });
+
+    test('retry une fois si la 1ère réponse est tronquée (MAX_TOKENS)', () async {
+      // Reproduit le bug observé : Gemini répond HTTP 200, finishReason
+      // MAX_TOKENS, JSON coupé au milieu. Le generator doit retenter avec
+      // un schéma simplifié et plus de tokens, et réussir.
+      final fallback = _CountingFallback();
+      final calls = <Map<String, dynamic>>[];
+      final client = MockClient((req) async {
+        calls.add(jsonDecode(req.body) as Map<String, dynamic>);
+        if (calls.length == 1) {
+          return _responseRaw(
+            rawText: '{\n  "title": "iPhone 15 — comme neuf",\n  "description": "Un téléphone',
+            finishReason: 'MAX_TOKENS',
+            usageMetadata: const {
+              'promptTokenCount': 250,
+              'candidatesTokenCount': 1500,
+              'totalTokenCount': 1750,
+            },
+          );
+        }
+        return http.Response.bytes(
+          utf8.encode(_envelope({
+            'title': 'iPhone 15 — comme neuf',
+            'description': 'Un téléphone bien entretenu.',
+            'suggested_price': 590,
+          })),
+          200,
+          headers: {'content-type': 'application/json; charset=utf-8'},
+        );
+      });
+
+      final gen = GeminiAdGenerator(
+        apiKey: 'k',
+        fallback: fallback,
+        httpClient: client,
+      );
+
+      final ad = await gen.generate(draft: _draft, category: electronicsCategory);
+
+      expect(calls.length, 2, reason: 'doit avoir retenté exactement une fois');
+      expect(fallback.calls, 0, reason: 'le retry a réussi, pas de fallback');
+      expect(ad.title, 'iPhone 15 — comme neuf');
+      expect(ad.suggestedPrice, 590);
+
+      // Vérifie que le retry a bien simplifié le schéma et bumpé les tokens.
+      final firstCfg = calls[0]['generationConfig'] as Map<String, dynamic>;
+      final secondCfg = calls[1]['generationConfig'] as Map<String, dynamic>;
+      expect(firstCfg['maxOutputTokens'], 1500);
+      expect(secondCfg['maxOutputTokens'], 2000);
+      final firstProps =
+          (firstCfg['responseSchema'] as Map<String, dynamic>)['properties']
+              as Map<String, dynamic>;
+      final secondProps =
+          (secondCfg['responseSchema'] as Map<String, dynamic>)['properties']
+              as Map<String, dynamic>;
+      expect(firstProps.containsKey('improvement_tips'), isTrue);
+      expect(secondProps.containsKey('improvement_tips'), isFalse);
+    });
+
+    test('fallback si même le retry renvoie du JSON tronqué', () async {
+      final fallback = _CountingFallback();
+      var n = 0;
+      final client = MockClient((req) async {
+        n++;
+        return _responseRaw(
+          rawText: '{"title":"T","description":"D',
+          finishReason: 'MAX_TOKENS',
+        );
+      });
+
+      final gen = GeminiAdGenerator(
+        apiKey: 'k',
+        fallback: fallback,
+        httpClient: client,
+      );
+
+      final ad = await gen.generate(draft: _draft, category: electronicsCategory);
+      expect(n, 2, reason: 'tentative initiale + 1 retry');
+      expect(fallback.calls, 1);
+      // Le mock construit le titre depuis brand + model.
+      expect(ad.title, 'Apple iPhone 15');
+    });
+
+    test('ne retry pas si la 1ère réponse est juste mal formée mais complète', () async {
+      // JSON parfaitement clos mais sans champ "title" : pas de troncature,
+      // pas de raison de retenter — on tombe direct sur le fallback.
+      final fallback = _CountingFallback();
+      var n = 0;
+      final client = MockClient((req) async {
+        n++;
+        return http.Response(
+          _envelope({'description': 'Pas de titre'}),
+          200,
+        );
+      });
+
+      final gen = GeminiAdGenerator(
+        apiKey: 'k',
+        fallback: fallback,
+        httpClient: client,
+      );
+
+      await gen.generate(draft: _draft, category: electronicsCategory);
+      expect(n, 1, reason: 'aucun retry attendu');
+      expect(fallback.calls, 1);
     });
 
     test('lance GenerationException si le client HTTP timeout', () async {
